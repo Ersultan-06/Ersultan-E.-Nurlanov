@@ -1,4 +1,10 @@
-import math
-a=int(input('Input number of sides: '))
-b=int(input('Input the length of a side: '))
-print('The area of the polygon is: ',int((pow(b,2)*a)/(4*math.tan((math.pi/a)))),sep='')
+def is_palindrome(string):
+    string = string.lower()
+    return string == string[::-1]
+
+startstring = input("Введите строку: ")
+
+if is_palindrome(startstring):
+    print("Слово является палиндромом.")
+else:
+    print("Слово не является палиндромом.")

@@ -1,155 +1,189 @@
-
 import pygame
-import random
-import time
-from itertools import chain
-
+from random import randint, randrange
 pygame.init()
 
-
-black = pygame.Color((0,0,0))
-white = pygame.Color((255,255,255))
-red = pygame.Color((255,0,0))
-blue = pygame.Color((0,0,255))
-green = pygame.Color((0,255,0))
-
-# Некоторые игровые переменные
-screen_width = 400
-screen_height = 600
-speed = 5
-
-score = 0
-coin_score = 0
-
-
-font = pygame.font.SysFont("Verdana", 60)
-font_small = pygame.font.SysFont("Verdana", 20)
-game_over = font.render("Game Over", True, black)
-
-
-background = pygame.image.load("/Users/ersultanersultan/Desktop/pp2/lap8/racer/AnimatedStreet.png")
-
-# Экран и счетчик кадров
-screen = pygame.display.set_mode((screen_width, screen_height))
-screen.fill(white)
-pygame.display.set_caption("Game")
+w, h, fps, level, step = 800, 800, 10, 0, 40 # разделяем окно на 400 квадратиков, 20 на 20
+screen = pygame.display.set_mode((w, h))
+pygame.display.set_caption('Snake Game')
+is_running, lose = True, False
 clock = pygame.time.Clock()
-loop = True
+score = pygame.font.SysFont("Verdana", 20)
+surf = pygame.Surface((390, 390), pygame.SRCALPHA)
+
+gameover = pygame.image.load("/Users/ersultanersultan/Desktop/pp2/lap9/snake/gameover.jpg")
+gameover = pygame.transform.scale(gameover, (390, 390))
+time = 5000
+flag = False
+pygame.mixer.init()
 
 
-class Enemy(pygame.sprite.Sprite):
+class Food:
+    def __init__(self, im):
+        # задаем рандомные координаты для еды в диапазоне игрового поля с шагом в 40
+        self.x = randrange(0, w, step)
+        self.y = randrange(0, h, step)
+        self.r = 0
+        self.image = im 
+    def draw(self):
+        screen.blit(self.image, (self.x, self.y))
+
+    def draw2(self):
+        self.x = randrange(0, w, step)
+        self.y = randrange(0, h, step)
+        self.r = randint(1,2)
+        self.image = pygame.image.load(f'/Users/ersultanersultan/Desktop/pp2/lap9/snake/png-transparent-apple-pencil-teacher-turnip-love-food-heart_e3TeU-transformed.png')
+
+class Snake:
     def __init__(self):
-        super().__init__()
-        self.image = pygame.image.load("/Users/ersultanersultan/Desktop/pp2/lap8/racer/Enemy.png")
-        self.rect = self.image.get_rect()
-        self.rect.center = (random.randint(40, screen_width - 40), -20)
-    def move(self):
-        global score
-        self.rect.move_ip(0,speed)
-        if (self.rect.top > screen_height):
-            score += 1
-            self.rect.top = 0
-            self.rect.center = (random.randint(40, screen_width - 40), -20)
+        self.speed = step
+        self.body = [[360, 360]] # изначальные координаты головы
+        self.dx = 0
+        self.dy = 0
+        self.score = 0
+        self.color = 'green'
     
+    def move(self, events):
+        for event in events:
+            if event.type == pygame.KEYDOWN: # движение змейки по нажатию на клавиатуру
+                if event.key == pygame.K_a and self.dx == 0: # чтобы при нажатии налево, змейка не двигалась вправо
+                    self.dx = -self.speed
+                    self.dy = 0
+                if event.key == pygame.K_d and self.dx == 0:
+                    self.dx = self.speed
+                    self.dy = 0
+                if event.key == pygame.K_w and self.dy == 0:
+                    self.dx = 0
+                    self.dy = -self.speed
+                if event.key == pygame.K_s and self.dy == 0:
+                    self.dx = 0
+                    self.dy = self.speed
 
-class Player(pygame.sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        self.image = pygame.image.load("/Users/ersultanersultan/Desktop/pp2/lap8/racer/Player.png")
-        self.rect = self.image.get_rect()
-        self.rect.center = (160,520)
-    def move(self):
-        pressed_keys = pygame.key.get_pressed()
-        if self.rect.left > 0:
-            if pressed_keys[pygame.K_LEFT]:
-                self.rect.move_ip(-5,0)
-        if self.rect.right < screen_width:
-            if pressed_keys[pygame.K_RIGHT]:
-                self.rect.move_ip(5,0)
+        # передвигаем части тела змейки по х и у на предыдущие координаты
+        for i in range(len(self.body) - 1, 0, -1):
+            self.body[i][0] = self.body[i - 1][0] 
+            self.body[i][1] = self.body[i - 1][1]
 
-# Класс монеты
-class Coin(pygame.sprite.Sprite):
-    def __init__(self, enemy):
-        super().__init__()
-        self.weights = [30, 40]  # Возможные веса для монеты
-        self.weight = random.choice(self.weights)  # Случайное назначение веса
-        self.image = pygame.image.load("/Users/ersultanersultan/Desktop/pp2/lap8/racer/coin.png")
-        self.image = pygame.transform.scale(self.image, (self.weight, self.weight))  # Изменение размера изображения в соответствии с весом
-        self.rect = self.image.get_rect()
-        coord_range = list(chain(range(22, enemy.rect.center[0] - 24 - 22), range(enemy.rect.center[0] + 24 + 22, screen_width - 22)))
-        self.rect.center = (random.choice(coord_range), 0)
+        # передвигаем голову змейки по х и у на следующие координаты
+        self.body[0][0] += self.dx 
+        self.body[0][1] += self.dy 
 
-    def move(self, enemy):  # Движение монеты аналогично противникам
-        self.rect.move_ip(0, speed + self.weight // 10)  # Увеличение скорости в зависимости от веса
-        if self.rect.top > screen_height:
-            self.rect.top = 0
-            coord_range = list(chain(range(22, enemy.rect.center[0] - 24 - 22), range(enemy.rect.center[0] + 24 + 22, screen_width - 22)))
-            self.rect.center = (random.choice(coord_range), 0)
-            self.weight = random.choice(self.weights)  # Случайное назначение веса при каждом спавне
+    def draw(self):
+        for part in self.body:
+            pygame.draw.rect(screen, self.color, (part[0], part[1], step, step))
+    
+    # проверяем когда змейка съедает еду
+    def collide_food(self, f:Food):
+        if self.body[0][0] == f.x and self.body[0][1] == f.y: # если координаты головы змейки совпадают с координатами еды
+            self.score += f.r
+            pygame.mixer.Sound('/Users/ersultanersultan/Desktop/pp2/lap9/snake/eat.mp3').play()
+            global flag
+            flag = True
+            self.body.append([1000, 1000]) 
+    
+    # заканчиваем игру, если голова змейки столкнеться со своим телом
+    def self_collide(self):
+        global is_running
+        if self.body[0] in self.body[1:]: # если голова змейки и входит в массив координат тела змейки
+            lose = True # запускаем цикл 'game_over' 
+            pygame.mixer.music.stop()
+            pygame.mixer.Sound('/Users/ersultanersultan/Desktop/pp2/lap9/snake/gameover.jpg').play()
+            pygame.mixer.music.stop()
 
-# Экземпляры игрока и противника
-P1 = Player()
-E1 = Enemy()
-coin = Coin(E1)
-# Группы спрайтов
-enemies = pygame.sprite.Group()
-enemies.add(E1)
-coins_group = pygame.sprite.Group()
-coins_group.add(coin)
-car_sprites = pygame.sprite.Group()
-car_sprites.add(P1, E1)
+    # проверяем чтобы еда не оказалась на теле змейки
+    def check_food(self, f:Food): 
+        if [f.x, f.y] in self.body: # если координаты еды входят в массив координат тела змейки
+            f.draw2() # заново рисуем еду
 
-all_sprites = pygame.sprite.Group()
-all_sprites.add(P1, E1, coin)
-# Новое пользовательское событие
-inc_speed = pygame.USEREVENT + 1
-pygame.time.set_timer(inc_speed, 1000)
 
-while loop:
-    for event in pygame.event.get():
-        if event.type == inc_speed:
-            speed += score
-            # Изменение скорости по увелечению монеты
+class Wall:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.pic = pygame.image.load("/Users/ersultanersultan/Desktop/pp2/lap9/snake/239enh3j3hdb.ZzJkp.jpg")
+
+
+    def draw(self):
+        screen.blit(self.pic, (self.x, self.y))
+
+def disappear(t):
+    pygame.time.set_timer(pygame.USEREVENT, t)
+    
+# создаем объекты змейки и еды
+s = Snake()
+f = Food(pygame.image.load(f'/Users/ersultanersultan/Desktop/pp2/lap9/snake/png-transparent-apple-pencil-teacher-turnip-love-food-heart_e3TeU-transformed.png'))
+disappear(5000)
+
+# запускаем основной цикл
+while is_running:
+    clock.tick(fps)
+    events = pygame.event.get()
+    for event in events:
         if event.type == pygame.QUIT:
-            loop = False
-    
-    screen.blit(background, (0,0))
-    scores = font_small.render(str(score), True, black)
-    coin_scores = font_small.render(f"Coins: {coin_score}", True, black)
-    screen.blit(scores, (10,10))
-    screen.blit(coin_scores, (300, 10))
+            is_running = False
+        if event.type == pygame.USEREVENT and flag == False: # еда появляется каждые пять секунд
+            f.draw2() # через 5 секунд перерисовывется
 
-    # Отображение и движение всех спрайтов
-    for entity in car_sprites:
-        screen.blit(entity.image, entity.rect)
-        entity.move()
-    # Движение монеты для каждого кадра
-    screen.blit(coin.image, coin.rect)
-    coin.move(E1)
-    
-    # Экран завершения игры
-    if pygame.sprite.spritecollideany(P1, enemies):
-        pygame.mixer.Sound("/Users/ersultanersultan/Desktop/pp2/lap8/racer/crash.wav").play()
-        time.sleep(5)
+    screen.fill((5,25,5))
 
-        screen.fill(red)
-        screen.blit(game_over, (30,250))
-        pygame.display.update()
+    # прорисовываем стенки с помощью заранее написанных паттернов  
+    my_walls = open(f'/Users/ersultanersultan/Desktop/pp2/lap9/snake/wall{level}.txt', 'r').readlines() # читает каждую линию как отдельный лист
+    walls = []
+    for i, line in enumerate(my_walls): # проходимся по индексу и строке
+        for j, each in enumerate(line): # проходимся по каждому элементу в строке
+            if each == "+":
+                walls.append(Wall(j * step, i * step)) # добавляем каждый блок стенки в лист
 
-        for entity in all_sprites:
-            entity.kill()
-        time.sleep(2)
-        pygame.quit()
-    if pygame.sprite.spritecollide(P1, coins_group, dokill=True):
-        pygame.mixer.Sound("/Users/ersultanersultan/Desktop/pp2/lap8/racer/getcoin.mp3").play()
-        coin_score += 1
-        coin = Coin(E1)
-        coins_group.add(coin)
-        all_sprites.add(coin)
-    
-    try:
+    # вызываем методы классов
+    f.draw()
+    s.draw()
+    s.move(events) # нажать любую клавишу (a, s, d, w) чтобы начать игру
+    s.collide_food(f)
+    s.self_collide()
+    s.check_food(f)
+
+    # высвечиваем текущие баллы и уровень на экран
+    counter = score.render(f'Score: {s.score}', True, 'black')
+    screen.blit(counter, (50, 50))
+    l = score.render(f'Level: {level}', True, 'black')
+    screen.blit(l, (50, 80))
+
+    # условие для перехода на следующий уровень
+    if s.score >= 3:
+        pygame.mixer.Sound('/Users/ersultanersultan/Desktop/pp2/lap9/snake/lvlup.mp3').play()
+        level += 1 # увеличиваем уровень
+        level %= 4 
+        fps += 2 # увеличиваем скорость
+        s.score = 0 # новый счетчик для следующего уровня
+
+    # высвечиваем стенки на экран
+    for wall in walls:
+        wall.draw()
+        if f.x == wall.x and f.y == wall.y: # перерисовываем еду, если она оказалась на стенках
+            f.draw2()
+
+        if s.body[0][0] == wall.x and s.body[0][1] == wall.y: # останавливаем игру, если голова змейки столкнеться со стенкой
+            lose = True
+            pygame.mixer.music.stop()
+            pygame.mixer.Sound('/Users/ersultanersultan/Desktop/pp2/lap9/snake/gameover.mp3').play()
+            pygame.mixer.music.stop()
+    if flag == True: # если мы съедаем еду, она заново перерисовывается и она заново будет стоять 5 секунд
+        time = 5000
+        disappear(time)
+        f.draw2() 
+        flag = False
+    # запускаем цикл 'game_over'
+    while lose:
+        clock.tick(fps)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                is_running = False
+                lose = False   
+        surf.blit(gameover, (0, 0))
+        screen.blit(surf, (200, 200))
+        cntr = score.render(f'Your score is {s.score}', True, 'white')
+        screen.blit(cntr, (320, 405))
+        l = score.render(f'Your level is {level}', True, 'white')
+        screen.blit(l, (322, 435))
         pygame.display.flip()
-    except:
-        print("Game Over!")
-        loop = False
-    clock.tick(60)
+
+    pygame.display.flip()
+pygame.quit()
